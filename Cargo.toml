@@ -1,0 +1,13 @@
+[package]
+name = "song_painter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gl = "0.14.0"
+glfw = { version = "0.59.0", default-features = false, features = ["with-window-handle-v0-5"] }
+image = "0.25.5"
+nalgebra = "0.33.2"
+rand = "0.9.0"
+rodio = "0.20.1"
+spin_sleep = "1.3.0"
