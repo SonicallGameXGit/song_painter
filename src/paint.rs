@@ -1,6 +1,19 @@
 use gl::types::{GLint, GLuint};
 use nalgebra::Point2;
 
+#[derive(Default, PartialEq)]
+enum RecordDirection {
+    #[default] Undefined,
+    Right,
+    Left,
+}
+
+#[derive(Default)]
+struct RecordContext {
+    direction: RecordDirection,
+    clamp_x: f32,
+}
+
 pub struct Canvas {
     width: usize,
     height: usize,
@@ -12,7 +25,7 @@ pub struct Canvas {
     undo_history: Vec<Vec<Line>>,
 
     dirty: bool,
-    min_x: f32,
+    current_rc: RecordContext,
 }
 impl Canvas {
     pub fn new(width: usize, height: usize) -> Self {
@@ -49,7 +62,7 @@ impl Canvas {
             undo_history: Vec::new(),
 
             dirty: false,
-            min_x: 0.0,
+            current_rc: RecordContext::default(),
         }
     }
 
@@ -89,7 +102,7 @@ impl Canvas {
 
         self.undo_history.clear();
         self.history.push(Vec::new());
-        self.min_x = 0.0;
+        self.current_rc = RecordContext::default();
     }
     fn draw_line(&mut self, line: &Line) {
         if line.start.x < 0.0 || line.start.y < 0.0 || line.end.x < 0.0 || line.end.y < 0.0 {
@@ -100,11 +113,11 @@ impl Canvas {
         }
 
         let start = Point2::new(
-            (f32::max(line.start.x, self.min_x) * self.width as f32) as i32,
+            (line.start.x * self.width as f32) as i32,
             (line.start.y * self.height as f32) as i32,
         );
         let end = Point2::new(
-            (f32::max(line.end.x, self.min_x) * self.width as f32) as i32,
+            (line.end.x * self.width as f32) as i32,
             (line.end.y * self.height as f32) as i32,
         );
         
@@ -137,10 +150,24 @@ impl Canvas {
         self.dirty = true;
     }
     pub fn line(&mut self, start: Point2<f32>, end: Point2<f32>) {
-        let line = Line { start, end };
+        if self.current_rc.direction == RecordDirection::Undefined {
+            if start.x < end.x {
+                self.current_rc.direction = RecordDirection::Right;
+                self.current_rc.clamp_x = 0.0;
+            } else {
+                self.current_rc.direction = RecordDirection::Left;
+                self.current_rc.clamp_x = f32::INFINITY;
+            }
+        }
+
+        let clamping_func = if self.current_rc.direction == RecordDirection::Right { f32::max } else { f32::min };
+
+        let mut line = Line { start, end };
+        line.start.x = clamping_func(line.start.x, self.current_rc.clamp_x);
+        line.end.x = clamping_func(line.end.x, self.current_rc.clamp_x);
         
         self.draw_line(&line);
-        self.min_x = f32::max(self.min_x, f32::max(line.start.x, line.end.x));
+        self.current_rc.clamp_x = clamping_func(self.current_rc.clamp_x, clamping_func(line.start.x, line.end.x));
         if let Some(last) = self.history.last_mut() { last.push(line); }
     }
 
@@ -151,16 +178,11 @@ impl Canvas {
         self.data = vec![0; width * height].into_boxed_slice();
         self.dirty = true;
 
-        let last_min_x = self.min_x;
-        self.min_x = 0.0;
-        
         for lines in &self.history.clone() {
             for line in lines {
                 self.draw_line(line);
             }
         }
-
-        self.min_x = last_min_x;
     }
 
     pub fn undo(&mut self) {

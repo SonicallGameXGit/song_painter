@@ -148,6 +148,9 @@ fn main() {
 
     let mut sink_timer = Instant::now();
 
+    let mut lmclckx = window.get_mouse_x();
+    let mut lmclcky = window.get_mouse_y();
+
     while window.is_running() {
         window.poll_events();
 
@@ -165,18 +168,34 @@ fn main() {
 
         if window.is_mouse_button_just_pressed(MouseButton::Left) {
             canvas.new_record();
+
+            lmclckx = window.get_mouse_x();
+            lmclcky = window.get_mouse_y();
         }
 
         let mx = window.get_mouse_x();
         let my = window.get_mouse_y();
         let lmx = window.get_last_mouse_x();
         let lmy = window.get_last_mouse_y();
-        if window.is_mouse_button_pressed(MouseButton::Left) && (mx != lmx || my != lmy) {
+
+        const SAFE_RADIUS: f32 = 7.5;
+        if window.is_mouse_button_pressed(MouseButton::Left) && ((mx - lmclckx).abs() > SAFE_RADIUS || (my - lmclcky).abs() > SAFE_RADIUS) {
             let size = Vector2::new(window.get_width() as f32, window.get_height() as f32);
-            canvas.line(
-                Point2::new(lmx / size.x, lmy / size.y),
-                Point2::new(mx / size.x, my / size.y),
-            );
+
+            if lmclckx != f32::INFINITY && lmclcky != f32::INFINITY {
+                canvas.line(
+                    Point2::new(lmclckx / size.x, lmclcky / size.y),
+                    Point2::new(mx / size.x, my / size.y),
+                );
+            } else if mx != lmx || my != lmy {
+                canvas.line(
+                    Point2::new(lmx / size.x, lmy / size.y),
+                    Point2::new(mx / size.x, my / size.y),
+                );
+            }
+
+            lmclckx = f32::INFINITY;
+            lmclcky = f32::INFINITY;
         }
 
         if window.is_key_pressed(Key::LeftControl) {
