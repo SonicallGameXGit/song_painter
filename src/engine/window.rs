@@ -21,6 +21,9 @@ pub struct Window {
     width: u32,
     height: u32,
 
+    last_width: u32,
+    last_height: u32,
+
     aspect: f32,
 
     mouse_x: f32,
@@ -62,10 +65,13 @@ impl Window {
         for (_, event) in glfw::flush_messages(&self.events) {
             match event {
                 glfw::WindowEvent::FramebufferSize(width, height) => {
+                    self.last_width = self.width;
+                    self.last_height = self.height;
+
                     self.width = width as u32;
                     self.height = height as u32;
-                    self.aspect = width as f32 / height as f32;
 
+                    self.aspect = width as f32 / height as f32;
                     unsafe { gl::Viewport(0, 0, width, height); }
                 }
                 glfw::WindowEvent::Key(key, _, action, _) => {
@@ -133,56 +139,63 @@ impl Window {
         }
     }
 
-    pub fn is_key_pressed(&self, key: glfw::Key) -> bool {
+    pub const fn is_key_pressed(&self, key: glfw::Key) -> bool {
         self.keys[key as usize] > 0
     }
-    pub fn is_key_just_pressed(&self, key: glfw::Key) -> bool {
+    pub const fn is_key_just_pressed(&self, key: glfw::Key) -> bool {
         self.keys[key as usize] == self.current_frame
     }
 
-    pub fn is_mouse_button_pressed(&self, button: glfw::MouseButton) -> bool {
+    pub const fn is_mouse_button_pressed(&self, button: glfw::MouseButton) -> bool {
         self.mouse_buttons[button as usize] > 0
     }
-    pub fn is_mouse_button_just_pressed(&self, button: glfw::MouseButton) -> bool {
+    pub const fn is_mouse_button_just_pressed(&self, button: glfw::MouseButton) -> bool {
         self.mouse_buttons[button as usize] == self.current_frame
     }
 
-    pub fn get_mouse_x(&self) -> f32 {
+    pub const fn get_mouse_x(&self) -> f32 {
         self.mouse_x
     }
-    pub fn get_mouse_y(&self) -> f32 {
+    pub const fn get_mouse_y(&self) -> f32 {
         self.mouse_y
     }
 
-    pub fn get_last_mouse_x(&self) -> f32 {
+    pub const fn get_last_mouse_x(&self) -> f32 {
         self.mouse_x - self.mouse_dx
     }
-    pub fn get_last_mouse_y(&self) -> f32 {
+    pub const fn get_last_mouse_y(&self) -> f32 {
         self.mouse_y - self.mouse_dy
     }
 
-    pub fn get_mouse_dx(&self) -> f32 {
+    pub const fn get_mouse_dx(&self) -> f32 {
         self.mouse_dx
     }
-    pub fn get_mouse_dy(&self) -> f32 {
+    pub const fn get_mouse_dy(&self) -> f32 {
         self.mouse_dy
     }
 
-    pub fn get_width(&self) -> u32 {
+    pub const fn get_width(&self) -> u32 {
         self.width
     }
-    pub fn get_height(&self) -> u32 {
+    pub const fn get_height(&self) -> u32 {
         self.height
     }
 
-    pub fn get_aspect(&self) -> f32 {
+    pub const fn get_last_width(&self) -> u32 {
+        self.last_width
+    }
+    pub const fn get_last_height(&self) -> u32 {
+        self.last_height
+    }
+
+    pub const fn get_aspect(&self) -> f32 {
         self.aspect
     }
 
-    pub fn get_delta(&self) -> Duration {
+    pub const fn get_delta(&self) -> Duration {
         self.delta_time
     }
-    pub fn get_delta_secs(&self) -> f32 {
+    pub const fn get_delta_secs(&self) -> f32 {
         self.delta_time.as_secs_f32()
     }
 
@@ -285,6 +298,9 @@ impl WindowBuilder {
 
             width: framebuffer_size.0 as u32,
             height: framebuffer_size.1 as u32,
+
+            last_width: framebuffer_size.0 as u32,
+            last_height: framebuffer_size.1 as u32,
 
             aspect: framebuffer_size.0 as f32 / framebuffer_size.1 as f32,
 
