@@ -465,26 +465,29 @@ impl ToneSamples {
         }
     }
 
+    pub fn last_amplitude(&self) -> f32 {
+        self.samples[self.i].amplitude
+    }
+
     fn get_sample(&self) -> f32 {
         f32::sin(self.time)
     }
+}
+impl Iterator for ToneSamples {
+    type Item = f32;
 
-    pub fn next(&mut self) -> f32 {
+    fn next(&mut self) -> Option<f32> {
         let tone = &self.samples[self.i];
         let sample = self.get_sample() * tone.amplitude;
         
         self.i += 1;
         if self.i >= self.samples.len() {
             self.i = self.samples.len() - 1;
-            return 0.0;
+            return None;
         }
 
         self.time += f32::consts::PI * 2.0 * tone.frequency / 44100.0;
-        sample
-    }
-
-    pub fn last_amplitude(&self) -> f32 {
-        self.samples[self.i].amplitude
+        Some(sample)
     }
 }
 
@@ -507,9 +510,17 @@ impl Iterator for PlayerSource {
         let mut sample = 0.0;
         let mut accumulated_amplitude = 0.0;
         
+        let mut no_more_samples = true;
         for tone_samples in &mut self.tones_samples {
-            sample += tone_samples.next();
-            accumulated_amplitude += tone_samples.last_amplitude();
+            if let Some(next_sample) = tone_samples.next() {
+                no_more_samples = false;
+
+                sample += next_sample;
+                accumulated_amplitude += tone_samples.last_amplitude();
+            }
+        }
+        if no_more_samples {
+            return None;
         }
         if accumulated_amplitude > 0.0 {
             sample /= f32::sqrt(accumulated_amplitude);
