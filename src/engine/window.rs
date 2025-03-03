@@ -35,6 +35,9 @@ pub struct Window {
     mouse_dx: f32,
     mouse_dy: f32,
 
+    scroll_dx: f32,
+    scroll_dy: f32,
+
     frame_time: Instant,
     delta_time: Duration,
 }
@@ -61,6 +64,9 @@ impl Window {
 
         self.glfw.poll_events();
         self.current_frame += 1;
+
+        self.scroll_dx = 0.0;
+        self.scroll_dy = 0.0;
 
         for (_, event) in glfw::flush_messages(&self.events) {
             match event {
@@ -95,6 +101,10 @@ impl Window {
                         }
                         _ => {}
                     }
+                }
+                glfw::WindowEvent::Scroll(x, y) => {
+                    self.scroll_dx += x as f32;
+                    self.scroll_dy += y as f32;
                 }
                 
                 _ => {}
@@ -172,6 +182,13 @@ impl Window {
     }
     pub const fn get_mouse_dy(&self) -> f32 {
         self.mouse_dy
+    }
+
+    pub const fn get_scroll_dx(&self) -> f32 {
+        self.scroll_dx
+    }
+    pub const fn get_scroll_dy(&self) -> f32 {
+        self.scroll_dy
     }
 
     pub const fn get_width(&self) -> u32 {
@@ -270,6 +287,7 @@ impl WindowBuilder {
 
         handle.set_key_polling(true);
         handle.set_mouse_button_polling(true);
+        handle.set_scroll_polling(true);
         handle.set_framebuffer_size_polling(true);
 
         glfw.set_swap_interval(if self.vsync { glfw::SwapInterval::Sync(1) } else { glfw::SwapInterval::None });
@@ -312,6 +330,9 @@ impl WindowBuilder {
 
             mouse_dx: 0.0,
             mouse_dy: 0.0,
+
+            scroll_dx: 0.0,
+            scroll_dy: 0.0,
 
             frame_time: Instant::now(),
             delta_time: Duration::ZERO,

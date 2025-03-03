@@ -405,6 +405,13 @@ impl Mesh {
             gl::DrawArrays(self.render_mode, 0, self.num_vertices);
         }
     }
+
+    pub const fn get_vao(&self) -> GLuint {
+        self.vao
+    }
+    pub const fn get_vbo(&self) -> GLuint {
+        self.vbo
+    }
 }
 impl Drop for Mesh {
     fn drop(&mut self) {

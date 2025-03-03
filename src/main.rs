@@ -2,6 +2,8 @@ pub mod engine;
 pub mod timeline;
 pub mod resources;
 
+use std::time::Instant;
+
 use engine::window::WindowBuilder;
 use glfw::Key;
 use resources::Resources;
@@ -26,10 +28,21 @@ fn main() {
     }
 
     let resources = Resources::default();
-    let mut timeline = Timeline::new(1, 1);
+    let mut timeline = Timeline::default();
+
+    let mut fps_timer = Instant::now();
+    let mut fps_counter = 0u64;
 
     while window.is_running() {
         window.poll_events();
+
+        if fps_timer.elapsed().as_secs() >= 1 {
+            println!("FPS: {}.", fps_counter);
+            
+            fps_counter = 0;
+            fps_timer = Instant::now();
+        }
+        fps_counter += 1;
 
         if window.is_key_just_pressed(Key::Space) {
             timeline.play(&sink);
