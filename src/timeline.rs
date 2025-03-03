@@ -21,7 +21,6 @@ struct Record {
     clamp_x: f32,
 }
 
-// TODO: Store lines as chunks and point to them from change history and in RenderSystem render the lines using instancing instead of drawing in texture
 #[derive(Default)]
 pub struct RecordSystem {
     history: Vec<Vec<Line>>,
@@ -42,6 +41,7 @@ impl RecordSystem {
         self.history.push(Vec::new());
     }
     pub fn add_line(&mut self, start: Point2<f32>, end: Point2<f32>, tone_system: &mut ToneSystem) -> Option<&Line> {
+        let line = Line { start, end };
         if self.current.direction == RecordDirection::Undefined {
             if start.x < end.x {
                 self.current.direction = RecordDirection::Right;
@@ -51,13 +51,19 @@ impl RecordSystem {
                 self.current.clamp_x = f32::INFINITY;
             }
         }
-        let clamping_func = if self.current.direction == RecordDirection::Right { f32::max } else { f32::min };
+
+        if start.x > end.x {
+            if self.current.direction == RecordDirection::Left {
+                self.new_record();
+                self.current.direction = RecordDirection::Right;
+                self.current.clamp_x = f32::INFINITY;
+            }
+        } else if self.current.direction == RecordDirection::Right {
+            self.new_record();
+            self.current.direction = RecordDirection::Left;
+            self.current.clamp_x = 0.0;
+        }
         
-        let mut line = Line { start, end };
-        line.start.x = clamping_func(line.start.x, self.current.clamp_x);
-        line.end.x = clamping_func(line.end.x, self.current.clamp_x);
-        
-        self.current.clamp_x = clamping_func(self.current.clamp_x, clamping_func(line.start.x, line.end.x));
         if let Some(last) = self.history.last_mut() {
             last.push(line.clone());
             tone_system.mark_dirty();
@@ -231,7 +237,7 @@ impl Timeline {
         self.drawing_system.update(window, &self.view, &mut self.tone_system, &mut self.record_system);
     }
     fn update_view(&mut self, window: &Window) {
-        const ZOOM_SPEED: f32 = 0.25;
+        const SCALE_SPEED: f32 = 0.1;
         const SCROLL_SPEED_X: f32 = 0.1;
         const SCROLL_SPEED_Y: f32 = 0.5;
 
@@ -245,12 +251,18 @@ impl Timeline {
         let is_alt_pressed = window.is_key_pressed(Key::LeftAlt) || window.is_key_pressed(Key::RightAlt);
 
         if is_alt_pressed && !is_ctrl_pressed {
-            self.view.scale.y -= window.get_scroll_dy() * ZOOM_SPEED;
-            self.view.offset.y += window.get_scroll_dy() * ZOOM_SPEED * 0.5;
+            let last_scale = self.view.scale.y;
+            
+            self.view.scale.y -= window.get_scroll_dy() * SCALE_SPEED * self.view.scale.y;
+            self.view.scale.y = self.view.scale.y.clamp(SCALE_Y_MIN, SCALE_Y_MAX);
+            self.view.offset.y += (last_scale - self.view.scale.y) * 0.5;
         }
         if is_ctrl_pressed && !is_alt_pressed {
-            self.view.scale.x -= window.get_scroll_dy() * ZOOM_SPEED;
-            self.view.offset.x += window.get_scroll_dy() * ZOOM_SPEED * 0.5;
+            let last_scale = self.view.scale.x;
+
+            self.view.scale.x -= window.get_scroll_dy() * SCALE_SPEED * self.view.scale.x;
+            self.view.scale.x = self.view.scale.x.clamp(SCALE_X_MIN, SCALE_X_MAX);            
+            self.view.offset.x += (last_scale - self.view.scale.x) * 0.5;
         }
         
         if !is_ctrl_pressed && !is_alt_pressed {
@@ -263,11 +275,12 @@ impl Timeline {
             }
         }
         
-        self.view.scale.x = self.view.scale.x.clamp(SCALE_X_MIN, SCALE_X_MAX);
-        self.view.scale.y = self.view.scale.y.clamp(SCALE_Y_MIN, SCALE_Y_MAX);
         self.view.offset.x = f32::max(self.view.offset.x, 0.0);
 
-        // TODO: Add mouse movement when Middle button is pressed
+        if window.is_mouse_button_pressed(MouseButton::Middle) {
+            self.view.offset.x -= window.get_mouse_dx() / window.get_width() as f32 * self.view.scale.x;
+            self.view.offset.y += window.get_mouse_dy() / window.get_height() as f32 * self.view.scale.y;
+        }
     }
 
     pub fn update(&mut self, window: &Window) {

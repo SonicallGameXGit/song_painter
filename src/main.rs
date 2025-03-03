@@ -45,7 +45,6 @@ fn main() {
         .with_size(800, 600)
         .with_vsync(false)
         .with_max_fps(200)
-        .with_msaa(2)
         .build();
     unsafe {
         gl::Enable(gl::BLEND);
