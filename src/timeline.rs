@@ -244,7 +244,7 @@ impl Timeline {
         const VIEW_SHARPNESS: f32 = 36.0;
 
         const SCALE_SPEED: f32 = 0.1;
-        const SCROLL_SPEED_X: f32 = 0.015;
+        const SCROLL_SPEED_X: f32 = 0.025;
         const SCROLL_SPEED_Y: f32 = 0.015;
 
         const SCALE_X_MIN: f32 = 0.25;
