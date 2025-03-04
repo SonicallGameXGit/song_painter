@@ -52,13 +52,13 @@ impl RecordSystem {
             }
         }
 
-        if start.x > end.x {
+        if end.x - start.x > 0.005 {
             if self.current.direction == RecordDirection::Left {
                 self.new_record();
                 self.current.direction = RecordDirection::Right;
                 self.current.clamp_x = f32::INFINITY;
             }
-        } else if self.current.direction == RecordDirection::Right {
+        } else if end.x - start.x < -0.005 && self.current.direction == RecordDirection::Right {
             self.new_record();
             self.current.direction = RecordDirection::Left;
             self.current.clamp_x = 0.0;
@@ -108,54 +108,57 @@ impl ToneSystem {
 
 #[derive(Default)]
 pub struct DrawingSystem {
-    mouse_click_x: f32,
-    mouse_click_y: f32,
+    cursor_click_x: f32,
+    cursor_click_y: f32,
+
+    last_cursor_x: f32,
+    last_cursor_y: f32,
 }
 impl DrawingSystem {
     pub fn update(&mut self, window: &Window, view: &View, tone_system: &mut ToneSystem, record_system: &mut RecordSystem) {
+        let cursor_x = window.get_mouse_x() / window.get_width() as f32 * view.scale.x + view.offset.x;
+        let cursor_y = (1.0 - window.get_mouse_y() / window.get_height() as f32) * view.scale.y + view.offset.y;
+
         if window.is_mouse_button_just_pressed(MouseButton::Left) {
             record_system.new_record();
 
-            self.mouse_click_x = window.get_mouse_x() / window.get_width() as f32 * view.scale.x + view.offset.x;
-            self.mouse_click_y = (1.0 - window.get_mouse_y() / window.get_height() as f32) * view.scale.y + view.offset.y;
+            self.cursor_click_x = cursor_x;
+            self.cursor_click_y = cursor_y;
         }
         
-        const SAFE_RADIUS: f32 = 0.01;
-        let mouse_x = window.get_mouse_x() / window.get_width() as f32 * view.scale.x + view.offset.x;
-        let mouse_y = (1.0 - window.get_mouse_y() / window.get_height() as f32) * view.scale.y + view.offset.y;
-
+        let safe_radius: f32 = 0.025 * Vector2::new(
+            window.get_mouse_dx(),
+            window.get_mouse_dy(),
+        ).magnitude();
         let is_out_of_safe_radius =
-            (mouse_x - self.mouse_click_x).abs() > SAFE_RADIUS ||
-            (mouse_y - self.mouse_click_y).abs() > SAFE_RADIUS;
+            (cursor_x - self.cursor_click_x).abs() > safe_radius ||
+            (cursor_y - self.cursor_click_y).abs() > safe_radius;
         
         if window.is_mouse_button_pressed(MouseButton::Left) && is_out_of_safe_radius {
-            let width = window.get_width() as f32;
-            let height = window.get_height() as f32;
-
-            let is_just_out_from_safe_radius = self.mouse_click_x != f32::INFINITY && self.mouse_click_y != f32::INFINITY;
+            let is_just_out_from_safe_radius = self.cursor_click_x != f32::INFINITY && self.cursor_click_y != f32::INFINITY;
             if is_just_out_from_safe_radius {
                 record_system.add_line(
-                    Point2::new(self.mouse_click_x, self.mouse_click_y),
-                    Point2::new(mouse_x, mouse_y),
+                    Point2::new(self.cursor_click_x, self.cursor_click_y),
+                    Point2::new(cursor_x, cursor_y),
                     tone_system,
                 );
             } else {
-                let is_mouse_moved = window.get_mouse_x() != window.get_last_mouse_x() || window.get_mouse_y() != window.get_last_mouse_y();
+                let is_mouse_moved = cursor_x != self.last_cursor_x || cursor_y != self.last_cursor_y;
                 if is_mouse_moved {
                     record_system.add_line(
-                        Point2::new(
-                            window.get_last_mouse_x() / width * view.scale.x + view.offset.x,
-                            (1.0 - window.get_last_mouse_y() / height) * view.scale.y + view.offset.y,
-                        ),
-                        Point2::new(mouse_x, mouse_y),
+                        Point2::new(self.last_cursor_x, self.last_cursor_y),
+                        Point2::new(cursor_x, cursor_y),
                         tone_system,
                     );
                 }
             }
 
-            self.mouse_click_x = f32::INFINITY;
-            self.mouse_click_y = f32::INFINITY;
+            self.cursor_click_x = f32::INFINITY;
+            self.cursor_click_y = f32::INFINITY;
         }
+
+        self.last_cursor_x = cursor_x;
+        self.last_cursor_y = cursor_y;
     }
 }
 
@@ -206,6 +209,7 @@ pub struct Timeline {
     render_system: RenderSystem,
     tone_system: ToneSystem,
 
+    raw_view: View,
     view: View,
 
     playing: bool,
@@ -237,9 +241,11 @@ impl Timeline {
         self.drawing_system.update(window, &self.view, &mut self.tone_system, &mut self.record_system);
     }
     fn update_view(&mut self, window: &Window) {
+        const VIEW_SHARPNESS: f32 = 36.0;
+
         const SCALE_SPEED: f32 = 0.1;
-        const SCROLL_SPEED_X: f32 = 0.1;
-        const SCROLL_SPEED_Y: f32 = 0.5;
+        const SCROLL_SPEED_X: f32 = 0.015;
+        const SCROLL_SPEED_Y: f32 = 0.015;
 
         const SCALE_X_MIN: f32 = 0.25;
         const SCALE_X_MAX: f32 = 400.0;
@@ -251,36 +257,38 @@ impl Timeline {
         let is_alt_pressed = window.is_key_pressed(Key::LeftAlt) || window.is_key_pressed(Key::RightAlt);
 
         if is_alt_pressed && !is_ctrl_pressed {
-            let last_scale = self.view.scale.y;
+            let last_scale = self.raw_view.scale.y;
             
-            self.view.scale.y -= window.get_scroll_dy() * SCALE_SPEED * self.view.scale.y;
-            self.view.scale.y = self.view.scale.y.clamp(SCALE_Y_MIN, SCALE_Y_MAX);
-            self.view.offset.y += (last_scale - self.view.scale.y) * 0.5;
+            self.raw_view.scale.y -= window.get_scroll_dy() * SCALE_SPEED * self.raw_view.scale.y;
+            self.raw_view.scale.y = self.raw_view.scale.y.clamp(SCALE_Y_MIN, SCALE_Y_MAX);
+            self.raw_view.offset.y += (last_scale - self.raw_view.scale.y) * (1.0 - window.get_mouse_y() / window.get_height() as f32);
         }
         if is_ctrl_pressed && !is_alt_pressed {
-            let last_scale = self.view.scale.x;
+            let last_scale = self.raw_view.scale.x;
 
-            self.view.scale.x -= window.get_scroll_dy() * SCALE_SPEED * self.view.scale.x;
-            self.view.scale.x = self.view.scale.x.clamp(SCALE_X_MIN, SCALE_X_MAX);            
-            self.view.offset.x += (last_scale - self.view.scale.x) * 0.5;
+            self.raw_view.scale.x -= window.get_scroll_dy() * SCALE_SPEED * self.raw_view.scale.x;
+            self.raw_view.scale.x = self.raw_view.scale.x.clamp(SCALE_X_MIN, SCALE_X_MAX);
+            self.raw_view.offset.x += (last_scale - self.raw_view.scale.x) * window.get_mouse_x() / window.get_width() as f32;
         }
         
         if !is_ctrl_pressed && !is_alt_pressed {
             if window.is_key_pressed(Key::LeftShift) || window.is_key_pressed(Key::RightShift) {
-                self.view.offset.x -= window.get_scroll_dy() * SCROLL_SPEED_X;
-                self.view.offset.y -= window.get_scroll_dx() * SCROLL_SPEED_Y;
+                self.raw_view.offset.x -= window.get_scroll_dy() * SCROLL_SPEED_X * self.raw_view.scale.x;
+                self.raw_view.offset.y -= window.get_scroll_dx() * SCROLL_SPEED_Y * self.raw_view.scale.y;
             } else {
-                self.view.offset.y += window.get_scroll_dy() * SCROLL_SPEED_Y;
-                self.view.offset.x -= window.get_scroll_dx() * SCROLL_SPEED_X;
+                self.raw_view.offset.y += window.get_scroll_dy() * SCROLL_SPEED_Y * self.raw_view.scale.y;
+                self.raw_view.offset.x -= window.get_scroll_dx() * SCROLL_SPEED_X * self.raw_view.scale.x;
             }
         }
-        
-        self.view.offset.x = f32::max(self.view.offset.x, 0.0);
-
         if window.is_mouse_button_pressed(MouseButton::Middle) {
-            self.view.offset.x -= window.get_mouse_dx() / window.get_width() as f32 * self.view.scale.x;
-            self.view.offset.y += window.get_mouse_dy() / window.get_height() as f32 * self.view.scale.y;
+            self.raw_view.offset.x -= window.get_mouse_dx() / window.get_width() as f32 * self.raw_view.scale.x;
+            self.raw_view.offset.y += window.get_mouse_dy() / window.get_height() as f32 * self.raw_view.scale.y;
         }
+
+        self.raw_view.offset.x = f32::max(self.raw_view.offset.x, 0.0);
+
+        self.view.offset = self.view.offset.lerp(&self.raw_view.offset, (VIEW_SHARPNESS * window.get_delta_secs()).min(1.0));
+        self.view.scale = self.view.scale.lerp(&self.raw_view.scale, (VIEW_SHARPNESS * window.get_delta_secs()).min(1.0));
     }
 
     pub fn update(&mut self, window: &Window) {
@@ -369,12 +377,13 @@ impl Default for Timeline {
             tone_system: ToneSystem::default(),
             render_system: RenderSystem,
 
+            raw_view: View::default(),
             view: View::default(),
 
             playing: false,
             player_timer: Instant::now(),
             player_duration: Duration::ZERO,
-            player_bpm: 120.0,
+            player_bpm: 168.0,
         }
     }
 }

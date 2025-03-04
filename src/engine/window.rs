@@ -170,13 +170,6 @@ impl Window {
         self.mouse_y
     }
 
-    pub const fn get_last_mouse_x(&self) -> f32 {
-        self.mouse_x - self.mouse_dx
-    }
-    pub const fn get_last_mouse_y(&self) -> f32 {
-        self.mouse_y - self.mouse_dy
-    }
-
     pub const fn get_mouse_dx(&self) -> f32 {
         self.mouse_dx
     }
